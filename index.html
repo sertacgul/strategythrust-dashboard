@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StrategyThrust Outreach</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
+
+        /* Login */
+        .login-screen {
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .login-box {
+            background: #fff; padding: 40px; border-radius: 16px; width: 400px; max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .login-box h1 { font-size: 22px; margin-bottom: 8px; }
+        .login-box h1 span { color: #4fc3f7; }
+        .login-box p { color: #888; font-size: 13px; margin-bottom: 24px; }
+        .login-box input {
+            width: 100%; padding: 12px 16px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 14px; margin-bottom: 16px; font-family: monospace;
+        }
+        .login-box button {
+            width: 100%; padding: 12px; background: #1976d2; color: #fff; border: none;
+            border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .login-box button:hover { background: #1565c0; }
+        .login-error { color: #c62828; font-size: 13px; margin-top: 8px; display: none; }
+
+        /* Navbar */
+        .navbar {
+            background: #1a1a2e; padding: 0 20px; display: flex; align-items: center; height: 52px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100;
+        }
+        .navbar .logo { color: #fff; font-size: 16px; font-weight: 700; text-decoration: none; }
+        .navbar .logo span { color: #4fc3f7; }
+        .navbar nav { margin-left: 32px; display: flex; gap: 4px; }
+        .navbar nav a {
+            color: #b0bec5; text-decoration: none; padding: 6px 14px; border-radius: 6px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+        }
+        .navbar nav a:hover, .navbar nav a.active { color: #fff; background: rgba(255,255,255,0.1); }
+        .navbar .logout { margin-left: auto; color: #b0bec5; font-size: 12px; cursor: pointer; padding: 6px 12px; border-radius: 6px; }
+        .navbar .logout:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+        /* Main */
+        .container { max-width: 900px; margin: 20px auto; padding: 0 16px; }
+        .hidden { display: none !important; }
+
+        /* Stats */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: #fff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .stat-card .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+        .stat-card .value.blue { color: #1976d2; }
+        .stat-card .value.green { color: #2e7d32; }
+        .stat-card .value.orange { color: #ef6c00; }
+
+        /* Cards */
+        .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 12px; }
+
+        /* Email item */
+        .email-item {
+            background: #fff; border-radius: 10px; padding: 16px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 10px;
+            border-left: 4px solid #ef6c00; cursor: pointer; transition: all 0.2s;
+        }
+        .email-item:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.12); }
+        .email-item.approved { border-left-color: #2e7d32; }
+        .email-item.rejected { border-left-color: #c62828; }
+        .email-item.sent { border-left-color: #1976d2; }
+        .email-item .company { font-weight: 600; font-size: 15px; }
+        .email-item .meta { color: #888; font-size: 12px; margin-top: 4px; }
+        .email-item .subject { color: #555; font-size: 13px; margin-top: 6px; }
+
+        /* Badge */
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+        }
+        .badge-pending { background: #fff3e0; color: #ef6c00; }
+        .badge-approved { background: #e8f5e9; color: #2e7d32; }
+        .badge-sent { background: #e3f2fd; color: #1565c0; }
+        .badge-rejected { background: #ffebee; color: #c62828; }
+
+        /* Email detail */
+        .email-detail-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 200; display: flex;
+            justify-content: center; align-items: flex-start; padding: 40px 16px;
+            overflow-y: auto;
+        }
+        .email-detail-box {
+            background: #fff; border-radius: 12px; width: 700px; max-width: 95vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 24px;
+        }
+        .email-detail-box .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .email-detail-box .close-btn { cursor: pointer; font-size: 24px; color: #888; padding: 4px 8px; }
+        .email-detail-box .close-btn:hover { color: #333; }
+        .email-detail-box .field { margin-bottom: 8px; font-size: 14px; }
+        .email-detail-box .field strong { color: #555; min-width: 70px; display: inline-block; }
+        .email-preview {
+            background: #fafbfc; border: 1px solid #e0e0e0; border-radius: 8px;
+            padding: 20px; margin: 16px 0; font-size: 14px; line-height: 1.6;
+        }
+        .analysis-box { background: #f5f7fa; border-radius: 8px; padding: 16px; margin-top: 16px; font-size: 13px; }
+        .analysis-box h4 { margin-bottom: 8px; font-size: 14px; }
+        .analysis-box ul { padding-left: 20px; }
+        .analysis-box li { margin-bottom: 4px; }
+
+        /* Buttons */
+        .btn {
+            display: inline-block; padding: 10px 20px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-success { background: #2e7d32; color: #fff; }
+        .btn-success:hover { background: #1b5e20; }
+        .btn-danger { background: #c62828; color: #fff; }
+        .btn-danger:hover { background: #b71c1c; }
+        .btn-outline { background: transparent; border: 1px solid #ddd; color: #555; }
+        .btn-outline:hover { background: #f5f5f5; }
+        .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .empty { text-align: center; padding: 40px; color: #888; }
+
+        @media (max-width: 600px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .email-detail-box { padding: 16px; }
+            .btn-group { flex-direction: column; }
+            .btn { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="login-screen">
+    <div class="login-box">
+        <h1>Strategy<span>Thrust</span> Outreach</h1>
+        <p>Enter your GitHub Personal Access Token to continue.</p>
+        <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+        <button onclick="login()">Sign In</button>
+        <div id="loginError" class="login-error"></div>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden">
+    <div class="navbar">
+        <a class="logo">Strategy<span>Thrust</span></a>
+        <nav>
+            <a onclick="showTab('overview')" id="tab-overview" class="active">Dashboard</a>
+            <a onclick="showTab('pending')" id="tab-pending">Pending</a>
+            <a onclick="showTab('approved')" id="tab-approved">Approved</a>
+            <a onclick="showTab('sent')" id="tab-sent">Sent</a>
+            <a onclick="showTab('rejected')" id="tab-rejected">Rejected</a>
+        </nav>
+        <span class="logout" onclick="logout()">Logout</span>
+    </div>
+
+    <div class="container">
+        <div id="view-overview">
+            <div class="stats-row" id="statsRow"></div>
+            <div class="card"><h3 style="margin-bottom:12px;">Recent Emails</h3><div id="recentList"></div></div>
+        </div>
+        <div id="view-pending" class="hidden"><div id="pendingList"></div></div>
+        <div id="view-approved" class="hidden"><div id="approvedList"></div></div>
+        <div id="view-sent" class="hidden"><div id="sentList"></div></div>
+        <div id="view-rejected" class="hidden"><div id="rejectedList"></div></div>
+    </div>
+</div>
+
+<!-- EMAIL DETAIL MODAL -->
+<div id="emailModal" class="email-detail-overlay hidden" onclick="if(event.target===this)closeModal()">
+    <div class="email-detail-box" id="emailDetailContent"></div>
+</div>
+
+<script>
+const REPO_OWNER = 'sertacgul';
+const REPO_NAME = 'strategythrust-dashboard';
+const DATA_PATH = 'data/emails.json';
+
+let TOKEN = '';
+let emailsData = [];
+let leadsData = [];
+let currentFileSha = '';
+
+// ---- AUTH ----
+function login() {
+    const token = document.getElementById('tokenInput').value.trim();
+    if (!token) return;
+    TOKEN = token;
+    verifyToken(token);
+}
+
+async function verifyToken(token) {
+    try {
+        const resp = await fetch('https://api.github.com/user', {
+            headers: { 'Authorization': `token ${token}` }
+        });
+        const user = await resp.json();
+        if (user.login === REPO_OWNER) {
+            localStorage.setItem('st_token', token);
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            loadData();
+        } else {
+            showLoginError('Access denied. Only @sertacgul can access.');
+        }
+    } catch (e) {
+        showLoginError('Invalid token or network error.');
+    }
+}
+
+function showLoginError(msg) {
+    const el = document.getElementById('loginError');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function logout() {
+    localStorage.removeItem('st_token');
+    TOKEN = '';
+    location.reload();
+}
+
+// ---- DATA ----
+async function loadData() {
+    try {
+        const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
+            headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (resp.status === 404) {
+            emailsData = [];
+            currentFileSha = '';
+            renderAll();
+            return;
+        }
+        const file = await resp.json();
+        currentFileSha = file.sha;
+        const content = atob(file.content.replace(/\n/g, ''));
+        const decoded = new TextDecoder('utf-8').decode(Uint8Array.from(content, c => c.charCodeAt(0)));
+        const data = JSON.parse(decoded);
+        emailsData = data.emails || [];
+        leadsData = data.leads || [];
+        renderAll();
+    } catch (e) {
+        console.error('Load error:', e);
+    }
+}
+
+async function saveData() {
+    const data = { emails: emailsData, leads: leadsData, updated_at: new Date().toISOString() };
+    const jsonStr = JSON.stringify(data, null, 2);
+    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+
+    const body = {
+        message: `Update: ${new Date().toLocaleString()}`,
+        content: encoded,
+        branch: 'main'
+    };
+    if (currentFileSha) body.sha = currentFileSha;
+
+    const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `token ${TOKEN}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+    });
+    const result = await resp.json();
+    currentFileSha = result.content?.sha || currentFileSha;
+}
+
+// ---- RENDER ----
+function renderAll() {
+    renderStats();
+    renderEmailList('pendingList', emailsData.filter(e => e.status === 'pending_review'), 'No pending emails');
+    renderEmailList('approvedList', emailsData.filter(e => e.status === 'approved'), 'No approved emails');
+    renderEmailList('sentList', emailsData.filter(e => e.status === 'sent'), 'No sent emails');
+    renderEmailList('rejectedList', emailsData.filter(e => e.status === 'rejected'), 'No rejected emails');
+    renderEmailList('recentList', emailsData.slice(0, 10), 'No emails yet');
+    // Update pending count in tab
+    const pendingCount = emailsData.filter(e => e.status === 'pending_review').length;
+    document.getElementById('tab-pending').textContent = `Pending (${pendingCount})`;
+}
+
+function renderStats() {
+    const pending = emailsData.filter(e => e.status === 'pending_review').length;
+    const approved = emailsData.filter(e => e.status === 'approved').length;
+    const sent = emailsData.filter(e => e.status === 'sent').length;
+    const rejected = emailsData.filter(e => e.status === 'rejected').length;
+    document.getElementById('statsRow').innerHTML = `
+        <div class="stat-card"><div class="label">Total Emails</div><div class="value blue">${emailsData.length}</div></div>
+        <div class="stat-card"><div class="label">Pending</div><div class="value orange">${pending}</div></div>
+        <div class="stat-card"><div class="label">Approved</div><div class="value green">${approved}</div></div>
+        <div class="stat-card"><div class="label">Sent</div><div class="value blue">${sent}</div></div>
+        <div class="stat-card"><div class="label">Rejected</div><div class="value" style="color:#c62828">${rejected}</div></div>
+        <div class="stat-card"><div class="label">Leads</div><div class="value blue">${leadsData.length}</div></div>
+    `;
+}
+
+function renderEmailList(containerId, emails, emptyMsg) {
+    const container = document.getElementById(containerId);
+    if (!emails.length) {
+        container.innerHTML = `<div class="empty">${emptyMsg}</div>`;
+        return;
+    }
+    container.innerHTML = emails.map((e, i) => {
+        const idx = emailsData.indexOf(e);
+        const statusClass = e.status === 'pending_review' ? '' : e.status;
+        const badgeClass = e.status === 'pending_review' ? 'pending' : e.status;
+        const lead = leadsData.find(l => l.id === e.lead_id) || {};
+        return `
+        <div class="email-item ${statusClass}" onclick="openEmail(${idx})">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="company">${lead.company_name || e.to_name || 'N/A'}</span>
+                <span class="badge badge-${badgeClass}">${e.status.replace('pending_review','pending')}</span>
+            </div>
+            <div class="subject">${e.subject}</div>
+            <div class="meta">${e.to_email} - ${e.language === 'tr' ? 'TR' : 'EN'}</div>
+        </div>`;
+    }).join('');
+}
+
+// ---- TABS ----
+function showTab(tab) {
+    ['overview','pending','approved','sent','rejected'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+        document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+    });
+}
+
+// ---- EMAIL DETAIL ----
+function openEmail(idx) {
+    const e = emailsData[idx];
+    const lead = leadsData.find(l => l.id === e.lead_id) || {};
+    let painPoints = [];
+    try { painPoints = JSON.parse(lead.pain_points || '[]'); } catch(x) {}
+    let serviceMatch = [];
+    try { serviceMatch = JSON.parse(lead.service_match || '[]'); } catch(x) {}
+
+    const badgeClass = e.status === 'pending_review' ? 'pending' : e.status;
+
+    let actionsHtml = '';
+    if (e.status === 'pending_review') {
+        actionsHtml = `
+        <div class="btn-group">
+            <button class="btn btn-success" onclick="approveEmail(${idx})">Approve</button>
+            <button class="btn btn-danger" onclick="rejectEmail(${idx})">Reject</button>
+        </div>`;
+    } else if (e.status === 'approved') {
+        actionsHtml = `<div class="btn-group">
+            <button class="btn btn-danger" onclick="rejectEmail(${idx})">Cancel (Reject)</button>
+        </div>`;
+    }
+
+    let analysisHtml = '';
+    if (lead.company_summary) {
+        analysisHtml = `
+        <div class="analysis-box">
+            <h4>Company Analysis</h4>
+            <p style="margin-bottom:8px">${lead.company_summary}</p>
+            <p style="margin-bottom:8px"><strong>Industry:</strong> ${lead.industry || 'N/A'} - <strong>Stage:</strong> ${lead.company_size || 'N/A'}</p>
+            ${painPoints.length ? `<h4 style="margin-top:12px">Pain Points</h4><ul>${painPoints.map(p => `<li>${p}</li>`).join('')}</ul>` : ''}
+            ${serviceMatch.length ? `<h4 style="margin-top:12px">Service Match</h4><ul>${serviceMatch.map(s => `<li>${s}</li>`).join('')}</ul>` : ''}
+        </div>`;
+    }
+
+    document.getElementById('emailDetailContent').innerHTML = `
+        <div class="header">
+            <h2 style="font-size:18px">${lead.company_name || e.to_name}</h2>
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+        </div>
+        <div class="field"><strong>To:</strong> ${e.to_email}</div>
+        <div class="field"><strong>From:</strong> ${e.from_email}</div>
+        <div class="field"><strong>Subject:</strong> ${e.subject}</div>
+        <div class="field"><strong>Status:</strong> <span class="badge badge-${badgeClass}">${e.status.replace('pending_review','pending')}</span></div>
+        <div class="email-preview">${e.body_html}</div>
+        ${actionsHtml}
+        ${analysisHtml}
+    `;
+    document.getElementById('emailModal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('emailModal').classList.add('hidden');
+}
+
+async function approveEmail(idx) {
+    emailsData[idx].status = 'approved';
+    emailsData[idx].approved_at = new Date().toISOString();
+    await saveData();
+    renderAll();
+    closeModal();
+}
+
+async function rejectEmail(idx) {
+    emailsData[idx].status = 'rejected';
+    emailsData[idx].reviewed_at = new Date().toISOString();
+    await saveData();
+    renderAll();
+    closeModal();
+}
+
+// ---- INIT ----
+(function init() {
+    const saved = localStorage.getItem('st_token');
+    if (saved) {
+        TOKEN = saved;
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('dashboard').classList.remove('hidden');
+        loadData();
+    }
+    document.getElementById('tokenInput').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+})();
+</script>
+</body>
+</html>
