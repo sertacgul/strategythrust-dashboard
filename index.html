@@ -182,14 +182,12 @@
 
 <script>
 const REPO_OWNER = 'sertacgul';
-const REPO_NAME = 'strategythrust-dashboard';
-const DATA_PATH = 'data/emails.json';
+const GIST_ID = '7e03904883ec548dbeb31e25d244b9d7';
+const GIST_FILENAME = 'emails.json';
 
 let TOKEN = '';
 let emailsData = [];
 let leadsData = [];
-let currentFileSha = '';
-
 // ---- AUTH ----
 function login() {
     const token = document.getElementById('tokenInput').value.trim();
@@ -232,20 +230,17 @@ function logout() {
 // ---- DATA ----
 async function loadData() {
     try {
-        const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
+        const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
             headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
         });
-        if (resp.status === 404) {
+        if (!resp.ok) {
             emailsData = [];
-            currentFileSha = '';
             renderAll();
             return;
         }
-        const file = await resp.json();
-        currentFileSha = file.sha;
-        const content = atob(file.content.replace(/\n/g, ''));
-        const decoded = new TextDecoder('utf-8').decode(Uint8Array.from(content, c => c.charCodeAt(0)));
-        const data = JSON.parse(decoded);
+        const gist = await resp.json();
+        const content = gist.files[GIST_FILENAME]?.content || '{}';
+        const data = JSON.parse(content);
         emailsData = data.emails || [];
         leadsData = data.leads || [];
         renderAll();
@@ -257,26 +252,16 @@ async function loadData() {
 async function saveData() {
     const data = { emails: emailsData, leads: leadsData, updated_at: new Date().toISOString() };
     const jsonStr = JSON.stringify(data, null, 2);
-    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
 
-    const body = {
-        message: `Update: ${new Date().toLocaleString()}`,
-        content: encoded,
-        branch: 'main'
-    };
-    if (currentFileSha) body.sha = currentFileSha;
-
-    const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
-        method: 'PUT',
+    await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        method: 'PATCH',
         headers: {
             'Authorization': `token ${TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
     });
-    const result = await resp.json();
-    currentFileSha = result.content?.sha || currentFileSha;
 }
 
 // ---- RENDER ----
