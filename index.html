@@ -128,6 +128,22 @@
         .loading { text-align: center; padding: 40px; color: #888; }
         .empty { text-align: center; padding: 40px; color: #888; }
 
+        /* Toast notification */
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            padding: 14px 28px; border-radius: 10px; font-size: 14px; font-weight: 600;
+            z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2.2s forwards;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .toast-success { background: #2e7d32; color: #fff; }
+        .toast-error { background: #c62828; color: #fff; }
+        .toast-info { background: #1565c0; color: #fff; }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+        .btn.loading { opacity: 0.6; pointer-events: none; }
+
         @media (max-width: 600px) {
             .stats-row { grid-template-columns: repeat(2, 1fr); }
             .email-detail-box { padding: 16px; }
@@ -379,20 +395,51 @@ function closeModal() {
     document.getElementById('emailModal').classList.add('hidden');
 }
 
+function showToast(message, type = 'success') {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `${type === 'success' ? '&#10003;' : type === 'error' ? '&#10007;' : '&#8505;'} ${message}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+}
+
 async function approveEmail(idx) {
-    emailsData[idx].status = 'approved';
-    emailsData[idx].approved_at = new Date().toISOString();
-    await saveData();
-    renderAll();
-    closeModal();
+    const btn = event.target;
+    btn.classList.add('loading');
+    btn.textContent = 'Approving...';
+    try {
+        emailsData[idx].status = 'approved';
+        emailsData[idx].approved_at = new Date().toISOString();
+        await saveData();
+        renderAll();
+        closeModal();
+        const lead = leadsData.find(l => l.id === emailsData[idx].lead_id) || {};
+        showToast(`${lead.company_name || 'Email'} approved!`, 'success');
+    } catch (e) {
+        btn.classList.remove('loading');
+        btn.textContent = 'Approve';
+        showToast('Failed to approve. Try again.', 'error');
+    }
 }
 
 async function rejectEmail(idx) {
-    emailsData[idx].status = 'rejected';
-    emailsData[idx].reviewed_at = new Date().toISOString();
-    await saveData();
-    renderAll();
-    closeModal();
+    const btn = event.target;
+    btn.classList.add('loading');
+    btn.textContent = 'Rejecting...';
+    try {
+        emailsData[idx].status = 'rejected';
+        emailsData[idx].reviewed_at = new Date().toISOString();
+        await saveData();
+        renderAll();
+        closeModal();
+        showToast('Email rejected.', 'info');
+    } catch (e) {
+        btn.classList.remove('loading');
+        btn.textContent = 'Reject';
+        showToast('Failed to reject. Try again.', 'error');
+    }
 }
 
 // ---- INIT ----
