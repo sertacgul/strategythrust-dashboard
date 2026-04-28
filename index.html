@@ -351,11 +351,28 @@ function openEmail(idx) {
     const badgeClass = e.status === 'pending_review' ? 'pending' : e.status;
 
     let actionsHtml = '';
+    let editHtml = '';
     if (e.status === 'pending_review') {
         actionsHtml = `
         <div class="btn-group">
             <button class="btn btn-success" onclick="approveEmail(${idx})">Approve</button>
+            <button class="btn btn-outline" onclick="toggleEdit(${idx})">Edit</button>
             <button class="btn btn-danger" onclick="rejectEmail(${idx})">Reject</button>
+        </div>`;
+        editHtml = `
+        <div id="editForm-${idx}" class="hidden" style="margin-top:16px;">
+            <div style="margin-bottom:12px;">
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Subject</label>
+                <input type="text" id="editSubject-${idx}" value="${e.subject.replace(/"/g,'&quot;')}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Email Body (HTML)</label>
+                <textarea id="editBody-${idx}" rows="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;">${e.body_html.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-success" onclick="saveEdit(${idx})">Save & Approve</button>
+                <button class="btn btn-outline" onclick="saveEditOnly(${idx})">Save Draft</button>
+            </div>
         </div>`;
     } else if (e.status === 'approved') {
         actionsHtml = `<div class="btn-group">
@@ -386,6 +403,7 @@ function openEmail(idx) {
         <div class="field"><strong>Status:</strong> <span class="badge badge-${badgeClass}">${e.status.replace('pending_review','pending')}</span></div>
         <div class="email-preview">${e.body_html}</div>
         ${actionsHtml}
+        ${editHtml}
         ${analysisHtml}
     `;
     document.getElementById('emailModal').classList.remove('hidden');
@@ -393,6 +411,40 @@ function openEmail(idx) {
 
 function closeModal() {
     document.getElementById('emailModal').classList.add('hidden');
+}
+
+function toggleEdit(idx) {
+    const form = document.getElementById(`editForm-${idx}`);
+    form.classList.toggle('hidden');
+}
+
+async function saveEdit(idx) {
+    const subject = document.getElementById(`editSubject-${idx}`).value;
+    const bodyHtml = document.getElementById(`editBody-${idx}`).value
+        .replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    emailsData[idx].subject = subject;
+    emailsData[idx].body_html = bodyHtml;
+    emailsData[idx].body_text = bodyHtml.replace(/<[^>]*>/g, '');
+    emailsData[idx].status = 'approved';
+    emailsData[idx].approved_at = new Date().toISOString();
+    await saveData();
+    renderAll();
+    closeModal();
+    const lead = leadsData.find(l => l.id === emailsData[idx].lead_id) || {};
+    showToast(`${lead.company_name || 'Email'} edited & approved!`, 'success');
+}
+
+async function saveEditOnly(idx) {
+    const subject = document.getElementById(`editSubject-${idx}`).value;
+    const bodyHtml = document.getElementById(`editBody-${idx}`).value
+        .replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    emailsData[idx].subject = subject;
+    emailsData[idx].body_html = bodyHtml;
+    emailsData[idx].body_text = bodyHtml.replace(/<[^>]*>/g, '');
+    await saveData();
+    closeModal();
+    openEmail(idx);
+    showToast('Draft saved.', 'info');
 }
 
 function showToast(message, type = 'success') {
