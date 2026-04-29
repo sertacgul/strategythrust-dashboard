@@ -271,10 +271,23 @@ async function loadData() {
 }
 
 async function saveData() {
-    const data = { emails: emailsData, leads: leadsData, updated_at: new Date().toISOString() };
-    const jsonStr = JSON.stringify(data, null, 2);
+    // Trim large fields before saving to keep gist under size limit
+    const trimmedLeads = leadsData.map(l => {
+        const copy = {...l};
+        delete copy.analysis_raw;
+        delete copy.prompt_used;
+        return copy;
+    });
+    const trimmedEmails = emailsData.map(e => {
+        const copy = {...e};
+        delete copy.prompt_used;
+        return copy;
+    });
 
-    await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+    const data = { emails: trimmedEmails, leads: trimmedLeads, updated_at: new Date().toISOString() };
+    const jsonStr = JSON.stringify(data);
+
+    const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
         method: 'PATCH',
         headers: {
             'Authorization': `token ${TOKEN}`,
@@ -283,6 +296,10 @@ async function saveData() {
         },
         body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
     });
+    if (!resp.ok) {
+        const err = await resp.text();
+        throw new Error(`Gist save failed: ${resp.status}`);
+    }
 }
 
 // ---- RENDER ----
