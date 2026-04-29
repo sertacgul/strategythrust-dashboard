@@ -175,7 +175,7 @@
             <a onclick="showTab('approved')" id="tab-approved">Approved</a>
             <a onclick="showTab('sent')" id="tab-sent">Sent</a>
             <a onclick="showTab('rejected')" id="tab-rejected">Rejected</a>
-            <a onclick="showTab('sentlog')" id="tab-sentlog">Sent Log</a>
+            <a onclick="showTab('approvedlog')" id="tab-approvedlog">Approved Log</a>
             <a onclick="showTab('all')" id="tab-all">All Emails</a>
         </nav>
         <span class="logout" onclick="logout()">Logout</span>
@@ -191,6 +191,7 @@
         <div id="view-sent" class="hidden"><div id="sentList"></div></div>
         <div id="view-rejected" class="hidden"><div id="rejectedList"></div></div>
         <div id="view-sentlog" class="hidden"><div id="sentLogContent"></div></div>
+        <div id="view-approvedlog" class="hidden"><div id="approvedLogContent"></div></div>
         <div id="view-all" class="hidden"><div id="allEmailsContent"></div></div>
     </div>
 </div>
@@ -293,12 +294,15 @@ function renderAll() {
     renderEmailList('rejectedList', emailsData.filter(e => e.status === 'rejected'), 'No rejected emails');
     renderEmailList('recentList', emailsData.slice(0, 10), 'No emails yet');
     renderSentLog();
+    renderApprovedLog();
     renderAllEmails();
     // Update tab counts
     const pendingCount = emailsData.filter(e => e.status === 'pending_review').length;
     const sentCount = emailsData.filter(e => e.status === 'sent').length;
     document.getElementById('tab-pending').textContent = `Pending (${pendingCount})`;
     document.getElementById('tab-sentlog').textContent = `Sent Log (${sentCount})`;
+    const approvedTotal = emailsData.filter(e => ['approved','sent'].includes(e.status)).length;
+    document.getElementById('tab-approvedlog').textContent = `Approved Log (${approvedTotal})`;
     document.getElementById('tab-all').textContent = `All Emails (${emailsData.length})`;
 }
 
@@ -362,6 +366,130 @@ function renderSentLog() {
         </table>
         </div>
     </div>`;
+}
+
+function renderApprovedLog() {
+    const container = document.getElementById('approvedLogContent');
+    // All approved + sent emails (approved at any point)
+    const approvedEmails = emailsData
+        .filter(e => ['approved','sent'].includes(e.status))
+        .sort((a, b) => (b.approved_at || b.generated_at || '').localeCompare(a.approved_at || a.generated_at || ''));
+
+    if (!approvedEmails.length) {
+        container.innerHTML = '<div class="empty">No approved emails yet.</div>';
+        return;
+    }
+
+    // Stats by country
+    const countryMap = {};
+    const industryMap = {};
+    approvedEmails.forEach(e => {
+        const lead = leadsData.find(l => l.id === e.lead_id) || {};
+        const c = lead.country || '??';
+        const ind = (lead.industry || 'Other').substring(0, 25);
+        countryMap[c] = (countryMap[c] || 0) + 1;
+        industryMap[ind] = (industryMap[ind] || 0) + 1;
+    });
+
+    // Country chart (horizontal bars)
+    const maxCountry = Math.max(...Object.values(countryMap));
+    const countryBars = Object.entries(countryMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([c, n]) => `
+        <div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span style="width:30px;font-size:12px;font-weight:600;color:#555;">${c}</span>
+            <div style="flex:1;background:#e8e8e8;border-radius:4px;height:18px;overflow:hidden;">
+                <div style="width:${(n/maxCountry*100)}%;background:linear-gradient(90deg,#1976d2,#4fc3f7);height:100%;border-radius:4px;"></div>
+            </div>
+            <span style="font-size:12px;color:#888;width:24px;text-align:right;">${n}</span>
+        </div>`).join('');
+
+    // Industry chart
+    const maxIndustry = Math.max(...Object.values(industryMap));
+    const industryBars = Object.entries(industryMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([ind, n]) => `
+        <div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span style="width:140px;font-size:11px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ind}</span>
+            <div style="flex:1;background:#e8e8e8;border-radius:4px;height:18px;overflow:hidden;">
+                <div style="width:${(n/maxIndustry*100)}%;background:linear-gradient(90deg,#2e7d32,#66bb6a);height:100%;border-radius:4px;"></div>
+            </div>
+            <span style="font-size:12px;color:#888;width:24px;text-align:right;">${n}</span>
+        </div>`).join('');
+
+    // Status breakdown
+    const sentCount = approvedEmails.filter(e => e.status === 'sent').length;
+    const awaitingSend = approvedEmails.filter(e => e.status === 'approved').length;
+
+    let rows = approvedEmails.map((e, i) => {
+        const lead = leadsData.find(l => l.id === e.lead_id) || {};
+        const approvedDate = e.approved_at ? e.approved_at.substring(0, 10) : '-';
+        const sentDate = e.sent_at ? e.sent_at.substring(0, 10) : '-';
+        const statusIcon = e.status === 'sent' ? '&#10003;' : '&#9679;';
+        const statusColor = e.status === 'sent' ? '#2e7d32' : '#ef6c00';
+        const emailType = !e.email_type || e.email_type === 'initial' ? '' : e.email_type === 'followup_1' ? ' (FU-1)' : ' (FU-2)';
+
+        return `<tr onclick="openEmail(${emailsData.indexOf(e)})" style="cursor:pointer;">
+            <td style="color:#888;font-size:12px;">${i + 1}</td>
+            <td><strong>${lead.company_name || e.to_name || '-'}</strong><span style="color:#aaa;font-size:11px;">${emailType}</span></td>
+            <td style="font-size:12px;">${e.to_email}</td>
+            <td>${lead.country || '-'}</td>
+            <td style="font-size:11px;">${(lead.industry || '-').substring(0, 30)}</td>
+            <td>${(e.language || 'en').toUpperCase()}</td>
+            <td style="color:${statusColor};font-size:14px;text-align:center;">${statusIcon}</td>
+            <td style="font-size:12px;color:#666;">${approvedDate}</td>
+            <td style="font-size:12px;color:#666;">${sentDate}</td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+    <!-- Stats Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;">
+        <div class="stat-card"><div class="label">Total Approved</div><div class="value green">${approvedEmails.length}</div></div>
+        <div class="stat-card"><div class="label">Sent</div><div class="value blue">${sentCount}</div></div>
+        <div class="stat-card"><div class="label">Awaiting Send</div><div class="value orange">${awaitingSend}</div></div>
+        <div class="stat-card"><div class="label">Countries</div><div class="value blue">${Object.keys(countryMap).length}</div></div>
+    </div>
+
+    <!-- Charts Row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="card">
+            <h4 style="margin:0 0 12px;font-size:13px;color:#555;">By Country</h4>
+            ${countryBars}
+        </div>
+        <div class="card">
+            <h4 style="margin:0 0 12px;font-size:13px;color:#555;">By Industry</h4>
+            ${industryBars}
+        </div>
+    </div>
+
+    <!-- Full Table -->
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3>Approved Firms (${approvedEmails.length})</h3>
+            <input type="text" id="approvedLogSearch" placeholder="Search..."
+                   oninput="filterApprovedLog()"
+                   style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:200px;">
+        </div>
+        <div style="overflow-x:auto;">
+        <table id="approvedLogTable">
+            <thead><tr>
+                <th>#</th><th>Company</th><th>Email</th><th>Country</th><th>Industry</th><th>Lang</th><th>Sent</th><th>Approved</th><th>Sent Date</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        </div>
+    </div>`;
+}
+
+function filterApprovedLog() {
+    const query = document.getElementById('approvedLogSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('#approvedLogTable tbody tr');
+    rows.forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
+    });
 }
 
 function filterSentLog() {
@@ -510,7 +638,7 @@ function renderEmailList(containerId, emails, emptyMsg) {
 
 // ---- TABS ----
 function showTab(tab) {
-    ['overview','pending','approved','sent','rejected','sentlog','all'].forEach(t => {
+    ['overview','pending','approved','sent','rejected','sentlog','approvedlog','all'].forEach(t => {
         document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
         document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
     });
