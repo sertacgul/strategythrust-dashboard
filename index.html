@@ -203,12 +203,10 @@
 const REPO_OWNER = 'sertacgul';
 const GIST_ID = '7e03904883ec548dbeb31e25d244b9d7';
 const GIST_FILENAME = 'emails.json';
-const GIST_BODIES = 'temp_bodies.json';
 
 let TOKEN = '';
 let emailsData = [];
 let leadsData = [];
-let emailBodies = {};
 // ---- AUTH ----
 function login() {
     const token = document.getElementById('tokenInput').value.trim();
@@ -257,26 +255,16 @@ async function loadData() {
         if (!resp.ok) { emailsData = []; renderAll(); return; }
         const gist = await resp.json();
 
-        // Load main data (small - metadata only)
-        const mainFile = gist.files[GIST_FILENAME];
-        let mainContent = mainFile?.content;
-        if (!mainContent && mainFile?.raw_url) {
-            mainContent = await (await fetch(mainFile.raw_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
+        const file = gist.files[GIST_FILENAME];
+        let content = file?.content;
+        // Large files: content is null, fetch via raw_url
+        if (!content && file?.raw_url) {
+            content = await (await fetch(file.raw_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
         }
-        const data = JSON.parse(mainContent || '{}');
+
+        const data = JSON.parse(content || '{}');
         emailsData = data.emails || [];
         leadsData = data.leads || [];
-
-        // Load email bodies (separate file)
-        const bodiesFile = gist.files[GIST_BODIES];
-        if (bodiesFile) {
-            let bodiesContent = bodiesFile.content;
-            if (!bodiesContent && bodiesFile.raw_url) {
-                bodiesContent = await (await fetch(bodiesFile.raw_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
-            }
-            emailBodies = JSON.parse(bodiesContent || '{}');
-        }
-
         renderAll();
     } catch (e) {
         console.error('Load error:', e);
@@ -704,7 +692,7 @@ function openEmail(idx) {
             </div>
             <div style="margin-bottom:12px;">
                 <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Email Body (HTML)</label>
-                <textarea id="editBody-${idx}" rows="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;">${((emailBodies[e.id] && emailBodies[e.id].body_html) || e.body_html || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                <textarea id="editBody-${idx}" rows="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;">${(e.body_html || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
             </div>
             <div class="btn-group">
                 <button class="btn btn-success" onclick="saveEdit(${idx})">Save & Approve</button>
@@ -738,7 +726,7 @@ function openEmail(idx) {
         <div class="field"><strong>From:</strong> ${e.from_email}</div>
         <div class="field"><strong>Subject:</strong> ${e.subject}</div>
         <div class="field"><strong>Status:</strong> <span class="badge badge-${badgeClass}">${e.status.replace('pending_review','pending')}</span></div>
-        <div class="email-preview">${(emailBodies[e.id] && emailBodies[e.id].body_html) || e.body_html || '<em>Email body loading...</em>'}</div>
+        <div class="email-preview">${e.body_html || '<em>No email body available</em>'}</div>
         ${actionsHtml}
         ${editHtml}
         ${analysisHtml}
