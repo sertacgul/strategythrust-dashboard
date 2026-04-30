@@ -302,17 +302,32 @@ async function saveData() {
     const data = { emails: trimmedEmails, leads: trimmedLeads, updated_at: new Date().toISOString() };
     const jsonStr = JSON.stringify(data);
 
-    const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        method: 'PATCH',
-        headers: {
-            'Authorization': `token ${TOKEN}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
-    });
-    if (!resp.ok) {
-        throw new Error(`Gist save failed: ${resp.status}`);
+    try {
+        const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `token ${TOKEN}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
+        });
+        if (!resp.ok) {
+            const errText = await resp.text();
+            console.error('Gist save error:', resp.status, errText.substring(0, 200));
+            showToast(`Save error: ${resp.status}. Retrying...`, 'error');
+            // Retry once
+            const resp2 = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
+            });
+            if (resp2.ok) { showToast('Saved on retry!', 'success'); }
+            else { showToast('Save failed. Check console.', 'error'); }
+        }
+    } catch (e) {
+        console.error('Network error saving:', e);
+        showToast('Network error. Will retry later.', 'error');
     }
 }
 
@@ -785,13 +800,12 @@ async function approveEmail(idx) {
     emailsData[idx].approved_at = new Date().toISOString();
     closeModal();
     renderAll();
-    showToast(`${lead.company_name || 'Email'} approving...`, 'info');
     try {
         await saveData();
-        showToast(`${lead.company_name || 'Email'} approved!`, 'success');
+        showToast(`${lead.company_name || 'Email'} approved and saved!`, 'success');
     } catch (e) {
-        console.error('Save error:', e);
-        showToast('Approved locally. Sync may retry later.', 'info');
+        console.error('Approve save error:', e);
+        showToast('Approved locally but sync failed. Will retry on next send.', 'info');
     }
 }
 
