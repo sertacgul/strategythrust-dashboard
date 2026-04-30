@@ -201,8 +201,9 @@
 
 <script>
 const REPO_OWNER = 'sertacgul';
+const REPO_NAME = 'strategythrust-dashboard';
+const DATA_PATH = 'data/emails.json';
 const GIST_ID = '7e03904883ec548dbeb31e25d244b9d7';
-const GIST_FILENAME = 'emails.json';
 
 let TOKEN = '';
 let emailsData = [];
@@ -249,17 +250,19 @@ function logout() {
 // ---- DATA ----
 async function loadData() {
     try {
-        const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        // Load from repo file (no size limit, served by GitHub Pages)
+        const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
             headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
         });
         if (!resp.ok) { emailsData = []; renderAll(); return; }
-        const gist = await resp.json();
+        const file = await resp.json();
 
-        const file = gist.files[GIST_FILENAME];
-        let content = file?.content;
-        // Large files: content is null, fetch via raw_url
-        if (!content && file?.raw_url) {
-            content = await (await fetch(file.raw_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
+        // If file > 1MB, use download_url
+        let content;
+        if (file.content) {
+            content = decodeURIComponent(escape(atob(file.content.replace(/\n/g, ''))));
+        } else if (file.download_url) {
+            content = await (await fetch(file.download_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
         }
 
         const data = JSON.parse(content || '{}');
@@ -289,29 +292,30 @@ async function saveData() {
 
     const data = { emails: trimmedEmails, leads: trimmedLeads, updated_at: new Date().toISOString() };
     const jsonStr = JSON.stringify(data);
+    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
 
     try {
-        const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-            method: 'PATCH',
+        // Get current file SHA
+        const getResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
+            headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        const fileInfo = await getResp.json();
+        const sha = fileInfo.sha;
+
+        // Update file in repo
+        const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
+            method: 'PUT',
             headers: {
                 'Authorization': `token ${TOKEN}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
+            body: JSON.stringify({ message: 'Dashboard update', content: encoded, sha: sha })
         });
         if (!resp.ok) {
             const errText = await resp.text();
-            console.error('Gist save error:', resp.status, errText.substring(0, 200));
-            showToast(`Save error: ${resp.status}. Retrying...`, 'error');
-            // Retry once
-            const resp2 = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
-            });
-            if (resp2.ok) { showToast('Saved on retry!', 'success'); }
-            else { showToast('Save failed. Check console.', 'error'); }
+            console.error('Save error:', resp.status, errText.substring(0, 200));
+            showToast(`Save error: ${resp.status}`, 'error');
         }
     } catch (e) {
         console.error('Network error saving:', e);
