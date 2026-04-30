@@ -203,10 +203,12 @@
 const REPO_OWNER = 'sertacgul';
 const GIST_ID = '7e03904883ec548dbeb31e25d244b9d7';
 const GIST_FILENAME = 'emails.json';
+const GIST_BODIES = 'temp_bodies.json';
 
 let TOKEN = '';
 let emailsData = [];
 let leadsData = [];
+let emailBodies = {};
 // ---- AUTH ----
 function login() {
     const token = document.getElementById('tokenInput').value.trim();
@@ -252,26 +254,29 @@ async function loadData() {
         const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
             headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
         });
-        if (!resp.ok) {
-            emailsData = [];
-            renderAll();
-            return;
-        }
+        if (!resp.ok) { emailsData = []; renderAll(); return; }
         const gist = await resp.json();
-        const file = gist.files[GIST_FILENAME];
-        let content = file?.content;
 
-        // For large files (>1MB), content is null - fetch via raw_url
-        if (!content && file?.raw_url) {
-            const rawResp = await fetch(file.raw_url, {
-                headers: { 'Authorization': `token ${TOKEN}` }
-            });
-            content = await rawResp.text();
+        // Load main data (small - metadata only)
+        const mainFile = gist.files[GIST_FILENAME];
+        let mainContent = mainFile?.content;
+        if (!mainContent && mainFile?.raw_url) {
+            mainContent = await (await fetch(mainFile.raw_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
         }
-
-        const data = JSON.parse(content || '{}');
+        const data = JSON.parse(mainContent || '{}');
         emailsData = data.emails || [];
         leadsData = data.leads || [];
+
+        // Load email bodies (separate file)
+        const bodiesFile = gist.files[GIST_BODIES];
+        if (bodiesFile) {
+            let bodiesContent = bodiesFile.content;
+            if (!bodiesContent && bodiesFile.raw_url) {
+                bodiesContent = await (await fetch(bodiesFile.raw_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
+            }
+            emailBodies = JSON.parse(bodiesContent || '{}');
+        }
+
         renderAll();
     } catch (e) {
         console.error('Load error:', e);
@@ -279,15 +284,17 @@ async function loadData() {
 }
 
 async function saveData() {
-    // Trim large fields before saving to keep gist under size limit
-    const trimmedLeads = leadsData.map(l => {
-        const copy = {...l};
-        delete copy.analysis_raw;
+    // Save only metadata (no body_html) to keep gist small
+    const trimmedEmails = emailsData.map(e => {
+        const copy = {...e};
+        delete copy.body_html;
+        delete copy.body_text;
         delete copy.prompt_used;
         return copy;
     });
-    const trimmedEmails = emailsData.map(e => {
-        const copy = {...e};
+    const trimmedLeads = leadsData.map(l => {
+        const copy = {...l};
+        delete copy.analysis_raw;
         delete copy.prompt_used;
         return copy;
     });
@@ -305,7 +312,6 @@ async function saveData() {
         body: JSON.stringify({ files: { [GIST_FILENAME]: { content: jsonStr } } })
     });
     if (!resp.ok) {
-        const err = await resp.text();
         throw new Error(`Gist save failed: ${resp.status}`);
     }
 }
@@ -683,7 +689,7 @@ function openEmail(idx) {
             </div>
             <div style="margin-bottom:12px;">
                 <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Email Body (HTML)</label>
-                <textarea id="editBody-${idx}" rows="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;">${e.body_html.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                <textarea id="editBody-${idx}" rows="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;">${((emailBodies[e.id] && emailBodies[e.id].body_html) || e.body_html || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
             </div>
             <div class="btn-group">
                 <button class="btn btn-success" onclick="saveEdit(${idx})">Save & Approve</button>
@@ -717,7 +723,7 @@ function openEmail(idx) {
         <div class="field"><strong>From:</strong> ${e.from_email}</div>
         <div class="field"><strong>Subject:</strong> ${e.subject}</div>
         <div class="field"><strong>Status:</strong> <span class="badge badge-${badgeClass}">${e.status.replace('pending_review','pending')}</span></div>
-        <div class="email-preview">${e.body_html}</div>
+        <div class="email-preview">${(emailBodies[e.id] && emailBodies[e.id].body_html) || e.body_html || '<em>Email body loading...</em>'}</div>
         ${actionsHtml}
         ${editHtml}
         ${analysisHtml}
