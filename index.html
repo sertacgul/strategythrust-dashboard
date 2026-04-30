@@ -258,8 +258,18 @@ async function loadData() {
             return;
         }
         const gist = await resp.json();
-        const content = gist.files[GIST_FILENAME]?.content || '{}';
-        const data = JSON.parse(content);
+        const file = gist.files[GIST_FILENAME];
+        let content = file?.content;
+
+        // For large files (>1MB), content is null - fetch via raw_url
+        if (!content && file?.raw_url) {
+            const rawResp = await fetch(file.raw_url, {
+                headers: { 'Authorization': `token ${TOKEN}` }
+            });
+            content = await rawResp.text();
+        }
+
+        const data = JSON.parse(content || '{}');
         emailsData = data.emails || [];
         leadsData = data.leads || [];
         renderAll();
