@@ -264,46 +264,23 @@ async function loadData() {
 }
 
 async function saveData() {
-    // Save only metadata (no body_html) to keep gist small
-    const trimmedEmails = emailsData.map(e => {
-        const copy = {...e};
-        delete copy.body_html;
-        delete copy.body_text;
-        delete copy.prompt_used;
-        return copy;
-    });
-    const trimmedLeads = leadsData.map(l => {
-        const copy = {...l};
-        delete copy.analysis_raw;
-        delete copy.prompt_used;
-        return copy;
-    });
-
-    const data = { emails: trimmedEmails, leads: trimmedLeads, updated_at: new Date().toISOString() };
-    const jsonStr = JSON.stringify(data);
-    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+    // Save only status changes to gist (tiny payload - just id:status pairs)
+    const statusMap = {};
+    emailsData.forEach(e => { statusMap[e.id] = e.status; });
+    const jsonStr = JSON.stringify({ statuses: statusMap, updated_at: new Date().toISOString() });
 
     try {
-        // Get current file SHA
-        const getResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
-            headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
-        });
-        const fileInfo = await getResp.json();
-        const sha = fileInfo.sha;
-
-        // Update file in repo
-        const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
-            method: 'PUT',
+        const resp = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+            method: 'PATCH',
             headers: {
                 'Authorization': `token ${TOKEN}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ message: 'Dashboard update', content: encoded, sha: sha })
+            body: JSON.stringify({ files: { 'approvals.json': { content: jsonStr } } })
         });
         if (!resp.ok) {
-            const errText = await resp.text();
-            console.error('Save error:', resp.status, errText.substring(0, 200));
+            console.error('Save error:', resp.status);
             showToast(`Save error: ${resp.status}`, 'error');
         }
     } catch (e) {
