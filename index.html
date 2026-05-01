@@ -250,22 +250,11 @@ function logout() {
 // ---- DATA ----
 async function loadData() {
     try {
-        // Load from repo file (no size limit, served by GitHub Pages)
-        const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_PATH}`, {
-            headers: { 'Authorization': `token ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
-        });
+        // Load directly from raw GitHub URL (no size limit, public repo)
+        const cacheBust = Date.now();
+        const resp = await fetch(`https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${DATA_PATH}?t=${cacheBust}`);
         if (!resp.ok) { emailsData = []; renderAll(); return; }
-        const file = await resp.json();
-
-        // If file > 1MB, use download_url
-        let content;
-        if (file.content) {
-            content = decodeURIComponent(escape(atob(file.content.replace(/\n/g, ''))));
-        } else if (file.download_url) {
-            content = await (await fetch(file.download_url, { headers: { 'Authorization': `token ${TOKEN}` } })).text();
-        }
-
-        const data = JSON.parse(content || '{}');
+        const data = await resp.json();
         emailsData = data.emails || [];
         leadsData = data.leads || [];
         renderAll();
